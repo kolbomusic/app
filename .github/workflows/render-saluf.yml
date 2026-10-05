@@ -1,4 +1,4 @@
-name: Render Saluf Videos
+name: Render Saluf Videos\n# rerender typography fix
 
 on:
   push:
