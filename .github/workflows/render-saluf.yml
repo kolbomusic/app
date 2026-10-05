@@ -1,0 +1,41 @@
+name: Render Saluf Videos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'render_saluf.py'
+      - '.github/workflows/render-saluf.yml'
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python packages
+        run: pip install --disable-pip-version-check edge-tts pillow
+      - name: Render narrated videos
+        run: python render_saluf.py
+      - name: Verify audio and video streams
+        run: |
+          ffprobe -v error -show_entries stream=codec_type,codec_name -of compact out/Saluf_Master_Full_HE_1080p.mp4
+          ffprobe -v error -show_entries stream=codec_type,codec_name -of compact out/Saluf_TikTok_HE_1080x1920.mp4
+      - name: Upload finished MP4s
+        uses: actions/upload-artifact@v4
+        with:
+          name: saluf-finished-videos
+          path: |
+            out/Saluf_Master_Full_HE_1080p.mp4
+            out/Saluf_TikTok_HE_1080x1920.mp4
+          compression-level: 0
+          retention-days: 7
