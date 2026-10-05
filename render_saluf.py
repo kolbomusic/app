@@ -7,10 +7,8 @@ ROOT=Path.cwd(); OUT=ROOT/'out'; OUT.mkdir(exist_ok=True)
 VOICE='he-IL-HilaNeural'
 RATE='+2%'
 PALETTE={'bg':'#F4F0E7','green':'#264C3A','terracotta':'#B76E4B','text':'#20362C','muted':'#66756A','cream':'#FFF9F0','gold':'#D8A15D','red':'#A84E3A'}
-FONT='/usr/share/fonts/truetype/noto/NotoSansHebrew-Regular.ttf'
-FONT_B='/usr/share/fonts/truetype/noto/NotoSansHebrew-Bold.ttf'
-if not Path(FONT).exists():
-    FONT='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'; FONT_B='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+FONT='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+FONT_B='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 FULL=[
 ('פתיח','סלוף תימני אמיתי בבית',['בלי טאבון','בלי מיקסר','עם מחבת ומכסה'],'היום נכין סלוף תימני ביתי, רך וגמיש מבפנים ושחום מבחוץ. לא צריך טאבון, סיר גריל או מיקסר. צריך קערה, כף, מחבת טובה, מכסה וקצת סבלנות.'),
@@ -122,11 +120,11 @@ def draw_scene(scene, idx, total, size, outpath, vertical=False):
     yy=by1+int(H*.025)
     for b in bullets:
         for j,line in enumerate(fit_lines(d,b,bulletf,bx2-bx1-int(W*.07),2)):
-            prefix='• ' if j==0 else '  '
+            prefix='- ' if j==0 else '  '
             d.text((bx2-int(W*.025),yy),prefix+line,font=bulletf,fill=PALETTE['text'],anchor='ra',direction='rtl'); yy += int(bulletf.size*1.35)
         yy += int(bulletf.size*.15)
     foot=ImageFont.truetype(FONT,int(W*(.018 if not vertical else .03)))
-    d.text((W-pad,H-int(H*.045)),'סלוף תימני בבית • מדריך מלא ומעשי',font=foot,fill=PALETTE['muted'],anchor='rs',direction='rtl')
+    d.text((W-pad,H-int(H*.045)),'סלוף תימני בבית | מדריך מלא ומעשי',font=foot,fill=PALETTE['muted'],anchor='rs',direction='rtl')
     im.save(outpath,quality=95)
 
 async def tts(text,path):
