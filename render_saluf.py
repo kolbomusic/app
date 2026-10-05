@@ -1,4 +1,4 @@
-import asyncio, json, os, subprocess, textwrap, math, shutil
+import asyncio, json, os, subprocess, textwrap, math, shutil, re
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
@@ -77,7 +77,13 @@ def run(cmd):
 def ffprobe_duration(p):
     return float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(p)]).decode().strip())
 
+def rtl_safe_numbers(text):
+    # Keep numeric ranges/fractions left-to-right inside Hebrew RTL text.
+    pattern = r'([0-9]+[½¼¾]?(?:[–-][0-9]+[½¼¾]?)?(?:°)?)'
+    return re.sub(pattern, lambda m: '\u2066' + m.group(1) + '\u2069', text)
+
 def fit_lines(draw, text, font, maxw, max_lines=3):
+    text = rtl_safe_numbers(text)
     words=text.split(); lines=[]; cur=''
     for w in words:
         test=(cur+' '+w).strip()
@@ -106,7 +112,7 @@ def draw_scene(scene, idx, total, size, outpath, vertical=False):
     small=ImageFont.truetype(FONT_B, int(W*(.025 if not vertical else .036)))
     titlef=ImageFont.truetype(FONT_B, int(W*(.05 if not vertical else .07)))
     bulletf=ImageFont.truetype(FONT, int(W*(.026 if not vertical else .043)))
-    d.text((W-pad, top+int(H*.075)), f'{idx:02d} / {total:02d}   {step}', font=small, fill=PALETTE['terracotta'], anchor='ra', direction='rtl')
+    d.text((W-pad, top+int(H*.075)), step, font=small, fill=PALETTE['terracotta'], anchor='ra', direction='rtl')
     y=top+int(H*.14)
     for line in fit_lines(d,title,titlef,W-2*pad,3):
         d.text((W-pad,y),line,font=titlef,fill=PALETTE['green'],anchor='ra',direction='rtl'); y += int(titlef.size*1.18)
