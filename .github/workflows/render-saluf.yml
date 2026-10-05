@@ -54,3 +54,5 @@ jobs:
           git add releases/
           git commit -m "Publish narrated saluf videos [skip ci]" || exit 0
           git push
+
+# final font rerender
