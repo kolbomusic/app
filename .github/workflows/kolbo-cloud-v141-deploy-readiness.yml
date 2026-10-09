@@ -1,0 +1,61 @@
+name: Kolbo Cloud 1.4.1 deploy-readiness
+on:
+  push:
+    branches: [kolbo-video-cloud-v141-render-preview]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source checksum and extract
+        run: |
+          python3 - <<'PY'
+          import pathlib,base64,hashlib,zipfile
+          raw=base64.b64decode(pathlib.Path('kolbo-cloud-v1.4.1.zip.b64').read_text().strip(),validate=True)
+          expected=pathlib.Path('kolbo-cloud-v1.4.1.zip.sha256').read_text().strip()
+          assert hashlib.sha256(raw).hexdigest()==expected
+          pathlib.Path('source.zip').write_bytes(raw)
+          with zipfile.ZipFile('source.zip') as z:
+              assert z.testzip() is None
+              for item in z.infolist():
+                  p=pathlib.PurePosixPath(item.filename)
+                  assert not p.is_absolute() and '..' not in p.parts
+              z.extractall('src')
+          PY
+      - name: Install Python dependencies for CPU tests
+        run: |
+          python3 -m pip install -q -r src/requirements.txt httpx
+      - name: Run 12 offline regression tests
+        run: |
+          cd src
+          python3 tools/generate_fixture.py demo/ci-8s.mp4
+          KOLBO_REFERENCE_VIDEO="$PWD/demo/ci-8s.mp4" python3 -m unittest discover -s tests -v
+      - name: Build deployment Docker image
+        run: docker build -t kolbo-cloud:1.4.1 .
+      - name: Smoke test Docker /health /v1/capabilities and auth
+        run: |
+          docker run -d --rm --name kolbo-cloud-ci -e KOLBO_CLOUD_API_KEY="ci-local-only-test-secret" -p 127.0.0.1:7860:7860 kolbo-cloud:1.4.1
+          for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:7860/health > /tmp/health.json; then break; fi; sleep 2; done
+          python3 - <<'PY'
+          import json, urllib.request, urllib.error
+          h=json.load(open('/tmp/health.json'))
+          assert h['video_generation_included'] is False
+          with urllib.request.urlopen('http://127.0.0.1:7860/v1/capabilities',timeout=10) as r: cap=json.load(r)
+          assert cap['production_ready'] is False
+          assert cap['profiles']==['orange_ball_meadow']
+          data=b'x'
+          req=urllib.request.Request('http://127.0.0.1:7860/v1/jobs',data=data,method='POST')
+          try:urllib.request.urlopen(req,timeout=10);raise AssertionError('auth not required')
+          except urllib.error.HTTPError as e:assert e.code==401,e.code
+          print('PASS Docker health, capabilities, and authentication')
+          PY
+      - name: Cleanup
+        if: always()
+        run: docker rm -f kolbo-cloud-ci || true
