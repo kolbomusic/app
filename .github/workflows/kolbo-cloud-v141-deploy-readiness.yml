@@ -54,8 +54,7 @@ jobs:
           with urllib.request.urlopen('http://127.0.0.1:7860/v1/capabilities',timeout=10) as r: cap=json.load(r)
           assert cap['production_ready'] is False
           assert cap['profiles']==['orange_ball_meadow']
-          data=b'x'
-          req=urllib.request.Request('http://127.0.0.1:7860/v1/jobs',data=data,method='POST')
+          req=urllib.request.Request('http://127.0.0.1:7860/v1/jobs/01234567-0123-4123-8123-012345678901')
           try:urllib.request.urlopen(req,timeout=10);raise AssertionError('auth not required')
           except urllib.error.HTTPError as e:assert e.code==401,e.code
           print('PASS Docker health, capabilities, and authentication')
