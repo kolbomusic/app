@@ -1,0 +1,50 @@
+name: Kolbo Cloud public-provider capability probe
+on:
+  push:
+    branches: [kolbo-cloud-provider-probe-20261009]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe public Gradio APIs without generating video
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,time,pathlib
+          spaces = [
+            ("MiniMax H3 audio+video","multimodalart/minimax-h3","https://multimodalart-minimax-h3.hf.space"),
+            ("LTX 2.5 audio+video","ChopperBlu/ltx-2-5-demo","https://chopperblu-ltx-2-5-demo.hf.space"),
+            ("LTX 2.3 official","Lightricks/LTX-2.3-Distilled","https://lightricks-ltx-2-3-distilled.hf.space"),
+            ("LTX 2.3 legacy","Lightricks/LTX-2.3","https://lightricks-ltx-2-3.hf.space"),
+            ("MiniMax H3 turbo","MiniMaxAI/MiniMax-H3-Turbo","https://minimaxai-minimax-h3-turbo.hf.space")
+          ]
+          def req(url,timeout=12):
+            r=urllib.request.Request(url,headers={"User-Agent":"KolboVideoCapabilities/0.1","Accept":"application/json"})
+            try:
+              with urllib.request.urlopen(r,timeout=timeout) as f: return f.status,json.load(f)
+            except urllib.error.HTTPError as e:
+              return e.code,{"error":e.reason}
+            except Exception as e: return None,{"error":type(e).__name__+": "+str(e)[:100]}
+          results=[]
+          for name,repo,base in spaces:
+            status,meta=req("https://huggingface.co/api/spaces/"+repo)
+            code,info=req(base+"/gradio_api/info")
+            named=info.get("named_endpoints",{}) if isinstance(info,dict) else {}
+            endpoints=[]
+            for endpoint,body in named.items():
+              params=body.get("parameters",[])
+              endpoints.append({"path":endpoint,"parameters":[{"label":p.get("label"),"parameter_name":p.get("parameter_name"),"type":(p.get("type") or {}).get("type") if isinstance(p.get("type"),dict) else p.get("type")} for p in params]})
+            record={"name":name,"repo":repo,"hf_status":status,"stage":(meta.get("runtime") or {}).get("stage") if isinstance(meta,dict) else None,"api_status":code,"endpoint_schemas":endpoints,"diagnostic":info.get("error") if not named else None}
+            results.append(record)
+            print(json.dumps(record,ensure_ascii=False),flush=True)
+          pathlib.Path("provider-capabilities.json").write_text(json.dumps(results,ensure_ascii=False,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: provider-capabilities
+          path: provider-capabilities.json
+          retention-days: 7
