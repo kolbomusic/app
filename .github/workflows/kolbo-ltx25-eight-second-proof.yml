@@ -1,0 +1,24 @@
+name: Kolbo LTX 2.5 eight-second audio+video independent proof
+on:
+  push:
+    branches: [kolbo-cloud-ltx25-proof-20261009]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: One anonymous 8s image-to-video+audio proof (no user image)
+        run: python3 provider_probes/probe_ltx25.py
+      - name: Export report and video only when produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kolbo-ltx25-eight-second-report
+          path: |
+            ltx25probe/result.json
+            ltx25probe/proof-8s-with-audio.mp4
+          retention-days: 7
