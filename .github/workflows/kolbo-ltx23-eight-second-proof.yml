@@ -1,0 +1,23 @@
+name: Kolbo Cloud LTX 2.3 native audio eight second proof
+on:
+  push:
+    branches: [kolbo-cloud-ltx23-proof-20261009]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run one no-token eight-second image-video-audio attempt
+        run: python3 provider_probes/probe_ltx23.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kolbo-cloud-ltx23-eight-seconds-result
+          path: |
+            ltx23probe/probe.json
+            ltx23probe/synthetic-8s-audio.mp4
+          retention-days: 7
