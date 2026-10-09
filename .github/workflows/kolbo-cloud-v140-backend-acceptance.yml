@@ -1,0 +1,43 @@
+name: Kolbo Cloud v1.4.0 CPU backend acceptance
+on:
+  push:
+    branches: [kolbo-video-cloud-v140-backend]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source archive checksum and safe extraction
+        run: |
+          python3 - <<'PYCI'
+          import base64,hashlib,pathlib,zipfile
+          contents=base64.b64decode(pathlib.Path('kolbo-cloud-v1.4.0.src.b64').read_text(),validate=True)
+          assert hashlib.sha256(contents).hexdigest()==pathlib.Path('kolbo-cloud-v1.4.0.src.sha256').read_text().strip()
+          pathlib.Path('backend.zip').write_bytes(contents)
+          with zipfile.ZipFile('backend.zip') as z:
+            assert z.testzip() is None
+            for i in z.infolist():
+              p=pathlib.PurePosixPath(i.filename)
+              assert not p.is_absolute() and '..' not in p.parts
+            z.extractall('backend')
+          PYCI
+      - name: Install CPU and test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install -q -r backend/requirements.txt httpx
+      - name: Generate synthetic video and run HTTP service tests
+        run: |
+          cd backend
+          python tools/generate_fixture.py demo/synthetic-ci-8s.mp4
+          KOLBO_REFERENCE_VIDEO="$PWD/demo/synthetic-ci-8s.mp4" python -m unittest discover -s tests -v
+      - name: Publish test status note
+        if: always()
+        run: echo 'Kolbo Video Cloud backend checks ran. No live cloud GPU or Android APK was tested.'
