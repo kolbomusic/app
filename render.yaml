@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: kolbo-video-cloud-preview
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: KOLBO_CLOUD_API_KEY
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
+# Prototype, not production: free instances sleep and storage is ephemeral.
