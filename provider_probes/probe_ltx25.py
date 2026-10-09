@@ -63,16 +63,47 @@ def collect(event_id):
                 event=""
     raise RuntimeError("SSE_ENDED_WITHOUT_VIDEO")
 def inspect_video(path):
-    x=json.loads(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration:stream=codec_type","-of","json",str(path)],timeout=30))
-    duration=float(x.get("format",{}).get("duration",0))
-    tracks=[v.get("codec_type") for v in x.get("streams",[])]
-    audible=False; volume=None
-    if "audio" in tracks:
-        p=subprocess.run(["ffmpeg","-v","info","-i",str(path),"-vn","-af","volumedetect","-f","null","-"],capture_output=True,text=True,timeout=120)
-        m=re.search(r"mean_volume:\s*([-\d.]+) dB",p.stderr)
-        if m:
-            volume=float(m.group(1));audible=volume>-65
-    return {"duration_seconds":duration,"tracks":tracks,"mean_audio_db":volume,"pass_duration":abs(duration-8)<.7,"pass_audible_audio":audible}
+    """Reject near-silent audio despite existence of a valid AAC stream."""
+    import array, math, statistics, sys
+    info=json.loads(subprocess.check_output(
+        ["ffprobe","-v","error","-show_entries","format=duration:stream=codec_type","-of","json",str(path)],
+        timeout=30
+    ))
+    duration=float(info.get("format",{}).get("duration",0))
+    tracks=[v.get("codec_type") for v in info.get("streams",[])]
+    report={"duration_seconds":duration,"tracks":tracks,"pass_duration":abs(duration-8)<.7,
+            "pass_audible_audio":False,"audio_quality_mode":"continuous ambient/audio required"}
+    if "audio" not in tracks:
+        report["audio_failure"]="AUDIO_STREAM_MISSING"
+        return report
+    pcm=subprocess.check_output(
+        ["ffmpeg","-v","error","-i",str(path),"-map","0:a:0","-ac","1","-ar","48000","-f","s16le","-"],
+        timeout=120
+    )
+    samples=array.array("h");samples.frombytes(pcm)
+    if sys.byteorder!="little": samples.byteswap()
+    if not samples:
+        report["audio_failure"]="AUDIO_EMPTY"
+        return report
+    rms=[]
+    peak=0
+    block=12000
+    for offset in range(0,len(samples),block):
+        x=samples[offset:offset+block]
+        power=sum(int(v)*int(v) for v in x)/len(x)
+        rms.append(20*math.log10(max(math.sqrt(power)/32768,1e-9)))
+        peak=max(peak,max(abs(v) for v in x))
+    median=statistics.median(rms)
+    activity=sum(v>-40 for v in rms)/len(rms)
+    peak_db=20*math.log10(max(peak/32768,1e-9))
+    report.update({"audio_median_250ms_dbfs":round(median,1),
+                   "audio_coverage_percent":round(activity*100,1),
+                   "audio_peak_dbfs":round(peak_db,1)})
+    report["pass_audible_audio"]=(median>=-34 and activity>=.80 and peak_db>=-18)
+    if not report["pass_audible_audio"]:
+        report["audio_failure"]="NEAR_SILENT_OR_INADEQUATE_AUDIO"
+    return report
+
 try:
     pic=ROOT/"reference.png";png_write(pic)
     R["state"]="upload";save()
