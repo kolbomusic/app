@@ -1,0 +1,54 @@
+name: Kolbo Video Studio v1.2.3 preview APK
+on:
+  push:
+    branches: [kolbo-video-v123-build]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Expand source with checksum
+        run: |
+          python3 - <<'PYCI'
+          import base64, pathlib, zipfile, hashlib
+          source=pathlib.Path('kolbo-video-studio-v1.2.3.src.b64')
+          payload=base64.b64decode(source.read_text().strip(), validate=True)
+          exp=pathlib.Path('kolbo-video-studio-v1.2.3.src.sha256').read_text().strip()
+          assert hashlib.sha256(payload).hexdigest()==exp, 'Archive checksum mismatch'
+          path=pathlib.Path('kolbo-video-studio-src.zip');path.write_bytes(payload)
+          with zipfile.ZipFile(path) as f:
+              assert f.testzip() is None
+              for i in f.infolist():
+                  p=pathlib.PurePosixPath(i.filename)
+                  assert not p.is_absolute() and '..' not in p.parts
+              f.extractall('studio')
+          PYCI
+      - name: Static unit checks
+        run: |
+          cd studio
+          python3 -m unittest discover -s tests -p static_check.py -v
+          mkdir -p build/test-pure
+          javac -d build/test-pure app/src/main/java/com/kolbo/videostudio/AudioRecoveryPolicy.java tests/AudioRecoveryPolicyTest.java
+          java -cp build/test-pure AudioRecoveryPolicyTest
+      - name: Build signed package
+        run: |
+          cd studio
+          python3 tools/build.py
+          python3 tools/verify.py
+      - name: Upload verified APK and report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kolbo-Video-Studio-v1.2.3-preview
+          path: |
+            studio/build/final/Kolbo-Video-Studio-1.2.3.apk
+            studio/build/verification/package.json
+          retention-days: 7
