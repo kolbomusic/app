@@ -1,0 +1,24 @@
+name: Kolbo Cloud 8s synthetic audio-video proof
+on:
+  push:
+    branches: [kolbo-cloud-8s-proof-20261009]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run one anonymous 8 second image-to-video+audio proof
+        run: python3 provider_probes/probe_generation.py
+      - name: Upload provider report and verified sample if produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kolbo-cloud-eight-seconds-result
+          path: |
+            h3probe/probe.json
+            h3probe/synthetic-8s-audio.mp4
+          retention-days: 7
